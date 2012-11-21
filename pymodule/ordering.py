@@ -48,11 +48,59 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # -- end license --
 
-# this file exists to mark this directory as a python module
+# this simple python interface just actiavates the c++ ExampleUpdater from cppmodule
+# Check out any of the python code in lib/hoomd-python-module/hoomd_script for moreexamples
 
-# need to import all submodules defined in this directory
+# First, we need to import the C++ module. It has the same name as this module (plugin_template) but with an underscore
+# in front
+from hoomd_plugins.external import _external
 
-# NOTE: adjust the import statement to match the name of the template
-# (here: plugin_template)
-from hoomd_plugins.external import ordering
+# Next, since we are extending an updater, we need to bring in the base class updater and some other parts from 
+# hoomd_script
+from hoomd_script import util
+from hoomd_script import force
+from hoomd_script import globals
+import hoomd
 
+class potential(force._force):
+    ## \internal
+    # \brief Constructs the external force
+    #
+    # \param name name of the external force instance
+    #
+    # Initializes the cpp_force to None.
+    # If specified, assigns a name to the instance
+    # Assigns a name to the force in force_name;
+    def __init__(self, order_parameters, lattice_vectors, interface_widths, name):
+        # initialize the base class
+        force._force.__init__(self, name);
+
+        self.cpp_force = None;
+
+        cpp_order_parameters = hoomd.std_vector_float()
+        for l in order_parameters:
+            cpp_order_parameters.append(l)
+
+        cpp_lattice_vectors = _external.std_vector_int3()
+        for l in lattice_vectors:
+            if len(l) != 3:
+                globals.msg.error("List of input lattice vectors not a list of triples.\n")
+                raise RuntimeError('Error creating external ordering potential.')
+            cpp_lattice_vectors.append(hoomd.make_int3(l[0], l[1], l[2]))
+
+        cpp_interface_widths = hoomd.std_vector_float()
+        for l in interface_widths:
+            cpp_interface_widths.append(l)
+
+        if not globals.exec_conf.isCUDAEnabled():
+            self.cpp_force = _external.OrderingExternal(globals.system_definition, cpp_order_parameters, cpp_lattice_vectors, cpp_interface_widths, self.name)
+        else:
+            self.cpp_force = _external.OrderingExternalGPU(globals.system_definition, cpp_order_parameters, cpp_lattice_vectors, cpp_interface_widths, self.name)
+
+        globals.system.addCompute(self.cpp_force, self.force_name)
+
+        self.enabled = True;
+
+    def update_coeffs(self) :
+        pass
+       

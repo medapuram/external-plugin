@@ -53,16 +53,16 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /*! Constructor
     \param sysdef system definition
  */
-OrderingExternalGPU::OrderingExternalGPU(boost::shared_ptr<SystemDefinition> sysdef, std::vector<Scalar> order_parameters, std::vector<int3> lattice_vectors)
-    : OrderingExternal(sysdef, order_parameters, lattice_vectors), m_block_size(128)
+OrderingExternalGPU::OrderingExternalGPU(boost::shared_ptr<SystemDefinition> sysdef, std::vector<Scalar> order_parameters, 
+                                         std::vector<int3> lattice_vectors, std::vector<Scalar> interface_widths, std::string log_suffix)
+    : OrderingExternal(sysdef, order_parameters, lattice_vectors, interface_widths, log_suffix), m_block_size(512)
     {
     }
 
 /*! Computes the specified constraint forces
     \param timestep Current timestep
-    \param ghost True if we are calculating forces due to ghost particles
 */
-void OrderingExternalGPU::computeForces(unsigned int timestep, bool ghost)
+void OrderingExternalGPU::computeForces(unsigned int timestep)
     {
     // start the profile
     if (this->m_prof) this->m_prof->push(this->exec_conf, "OrderingExternalGPU");
@@ -75,6 +75,7 @@ void OrderingExternalGPU::computeForces(unsigned int timestep, bool ghost)
     ArrayHandle<Scalar> d_virial(this->m_virial, access_location::device, access_mode::overwrite);
     ArrayHandle<Scalar> d_order_parameters(this->m_order_parameters, access_location::device, access_mode::read);
     ArrayHandle<int3> d_lattice_vectors(this->m_lattice_vectors, access_location::device, access_mode::read);
+    ArrayHandle<Scalar> d_interface_widths(this->m_interface_widths, access_location::device, access_mode::read);
     
     gpu_compute_ordering_external_forces(d_force.data,
                          d_virial.data,
@@ -82,7 +83,7 @@ void OrderingExternalGPU::computeForces(unsigned int timestep, bool ghost)
                          this->m_pdata->getN(),
                          d_pos.data,
                          box,
-                         m_block_size, d_order_parameters.data, m_lattice_vectors.getNumElements(), d_lattice_vectors.data);
+                         m_block_size, d_order_parameters.data, m_lattice_vectors.getNumElements(), d_lattice_vectors.data, d_interface_widths.data);
 
     if (this->m_prof) this->m_prof->pop();
 
@@ -95,7 +96,8 @@ void OrderingExternalGPU::computeForces(unsigned int timestep, bool ghost)
 void export_OrderingExternalGPU()
     {
     boost::python::class_<OrderingExternalGPU, boost::shared_ptr<OrderingExternalGPU>, boost::python::bases<OrderingExternal>, boost::noncopyable >
-                  ("OrderingExternalGPU", boost::python::init< boost::shared_ptr<SystemDefinition>, std::vector<Scalar>, std::vector<int3> >())
+                  ("OrderingExternalGPU", boost::python::init< boost::shared_ptr<SystemDefinition>, 
+                   std::vector<Scalar>, std::vector<int3>, std::vector<Scalar>, std::string >())
                   .def("setBlockSize", &OrderingExternalGPU::setBlockSize)
                   ;
     }

@@ -63,20 +63,36 @@ class OrderingExternal: public ForceCompute
     {
     public:
         //! Constructs the compute
-        OrderingExternal(boost::shared_ptr<SystemDefinition> sysdef, std::vector<Scalar> order_parameters, std::vector<int3> lattice_vectors);
+        OrderingExternal(boost::shared_ptr<SystemDefinition> sysdef, std::vector<Scalar> order_parameters, 
+                         std::vector<int3> lattice_vectors, std::vector<Scalar> interface_widths, std::string log_suffix);
 
         //! Sets parameters of the evaluator
         void setParams(unsigned int type, Scalar order_parameter);
+
+        //! Returns a list of log quantities this compute calculates
+        virtual std::vector< std::string > getProvidedLogQuantities();
+
+        //! Calculates the requested log value and returns it
+        virtual Scalar getLogValue(const std::string& quantity, unsigned int timestep);
 
     protected:
 
         GPUArray<Scalar> m_order_parameters;        //!< Array of per-type parameters
         GPUArray<int3> m_lattice_vectors;          //!< Array of lattice vectors
+        GPUArray<Scalar> m_interface_widths;        //!< Array of interface widths
+        std::string m_log_name;               //!< Cached log name
 
         //! Actually compute the forces
-        virtual void computeForces(unsigned int timestep, bool ghost);
+        virtual void computeForces(unsigned int timestep);
 
     };
+
+inline bool operator== (const int3 &a, const int3 &b)
+    {
+    return (a.x == b.x &&
+            a.y == b.y &&
+            a.z == b.z);
+    }
 
 void export_OrderingExternal();
 #endif

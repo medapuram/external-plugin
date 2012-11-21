@@ -64,7 +64,8 @@ class OrderingExternalGPU : public OrderingExternal
     {
     public:
         //! Constructs the compute
-        OrderingExternalGPU(boost::shared_ptr<SystemDefinition> sysdef, std::vector<Scalar> order_parameters, std::vector<int3> lattice_vectors);
+        OrderingExternalGPU(boost::shared_ptr<SystemDefinition> sysdef, std::vector<Scalar> order_parameters, 
+                            std::vector<int3> lattice_vectors, std::vector<Scalar> interface_widths, std::string log_suffix);
 
         //! Set the block size to execute on the GPU
         /*! \param block_size Size of the block to run on the device
@@ -79,7 +80,7 @@ class OrderingExternalGPU : public OrderingExternal
     protected:
 
         //! Actually compute the forces
-        virtual void computeForces(unsigned int timestep, bool ghost);
+        virtual void computeForces(unsigned int timestep);
 
         //! block size
         unsigned int m_block_size;

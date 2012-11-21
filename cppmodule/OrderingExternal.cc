@@ -42,6 +42,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Maintainer: jglaser
 
 #include "OrderingExternal.h"
+#include <boost/python/suite/indexing/vector_indexing_suite.hpp>
 
 /*! \file OrderingExternal.cc
     \brief Implements the OrderingExternal class
@@ -50,9 +51,12 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /*! Constructor
     \param sysdef system definition
  */
-OrderingExternal::OrderingExternal(boost::shared_ptr<SystemDefinition> sysdef, std::vector<Scalar> order_parameters, std::vector<int3> lattice_vectors)
+OrderingExternal::OrderingExternal(boost::shared_ptr<SystemDefinition> sysdef, std::vector<Scalar> order_parameters, 
+                                   std::vector<int3> lattice_vectors, std::vector<Scalar> interface_widths, std::string log_suffix)
     : ForceCompute(sysdef)
     {
+    m_log_name = std::string("external_ordering") + log_suffix;
+
     if(order_parameters.size() != m_pdata->getNTypes())
         {
         m_exec_conf->msg->error() << "Number of order parameters is not the same as number of atom types" << std::endl;
@@ -74,13 +78,48 @@ OrderingExternal::OrderingExternal(boost::shared_ptr<SystemDefinition> sysdef, s
         {
         h_lattice_vectors.data[i] = lattice_vectors[i];
         }
+
+    GPUArray<Scalar> gpu_interface_widths(interface_widths.size(), exec_conf);
+    m_interface_widths.swap(gpu_interface_widths);
+    ArrayHandle<Scalar> h_interface_widths(m_interface_widths, access_location::host, access_mode::overwrite);
+    for(unsigned int i = 0; i < m_interface_widths.getNumElements(); ++i)
+        {
+        h_interface_widths.data[i] = interface_widths[i];
+        }
     }
+
+/*! PotentialExternal provides
+    - \c external_"name"_energy
+*/
+std::vector< std::string > OrderingExternal::getProvidedLogQuantities()
+    {
+    vector<string> list;
+    list.push_back(m_log_name);
+    return list;
+    }
+
+/*! \param quantity Name of the log value to get
+    \param timestep Current timestep of the simulation
+*/
+Scalar OrderingExternal::getLogValue(const std::string& quantity, unsigned int timestep)
+    {
+    if (quantity == m_log_name)
+        {
+        compute(timestep);
+        return calcEnergySum();
+        }
+    else
+        {
+        this->m_exec_conf->msg->error() << "Ordering external: " << quantity << " is not a valid log quantity" << std::endl;
+        throw std::runtime_error("Error getting log value");
+        }
+    }
+
 
 /*! Computes the specified constraint forces
     \param timestep Current timestep
-    \param ghost True if we are calculating forces due to ghost particles
 */
-void OrderingExternal::computeForces(unsigned int timestep, bool ghost)
+void OrderingExternal::computeForces(unsigned int timestep)
     {
 
     if (m_prof) m_prof->push("OrderingExternal");
@@ -94,6 +133,7 @@ void OrderingExternal::computeForces(unsigned int timestep, bool ghost)
 
     ArrayHandle<Scalar> h_order_parameters(m_order_parameters,access_location::host, access_mode::read);
     ArrayHandle<int3> h_lattice_vectors(m_lattice_vectors,access_location::host, access_mode::read);
+    ArrayHandle<Scalar> h_interface_widths(m_interface_widths,access_location::host, access_mode::read);
 
     const BoxDim& box = m_pdata->getGlobalBox();
     Scalar3 L = box.getL();
@@ -128,11 +168,12 @@ void OrderingExternal::computeForces(unsigned int timestep, bool ghost)
             Scalar3 q = make_scalar3(2.0*M_PI*h_lattice_vectors.data[i].x/L.x,
                                  2.0*M_PI*h_lattice_vectors.data[i].y/L.y,
                                  2.0*M_PI*h_lattice_vectors.data[i].z/L.z);
-            Scalar arg, sine;
+            Scalar arg, sine, clip_parameter;
             arg = dot(X, q);
-            sine = sinf(arg);
+            clip_parameter = Scalar(1.0)/(h_interface_widths.data[i]*dot(q, L));
+            sine = clip_parameter*sinf(arg);
             deriv = deriv - sine*q;
-            cosine += cosf(arg);
+            cosine += clip_parameter*cosf(arg);
             }
         Scalar tanH = tanhf(cosine);
         energy = order_parameter*tanH;
@@ -178,8 +219,13 @@ void OrderingExternal::setParams(unsigned int type, Scalar order_parameter)
 void export_OrderingExternal()
     {
     boost::python::class_<OrderingExternal, boost::shared_ptr<OrderingExternal>, boost::python::bases<ForceCompute>, boost::noncopyable >
-                  ("OrderingExternal", boost::python::init< boost::shared_ptr<SystemDefinition>, std::vector<Scalar>, std::vector<int3> >())
+                  ("OrderingExternal", boost::python::init< boost::shared_ptr<SystemDefinition>, std::vector<Scalar>, 
+                   std::vector<int3>, std::vector<Scalar>, std::string >())
                   ;
+
+        class_<std::vector<int3> >("std_vector_int3")
+        .def(vector_indexing_suite< std::vector<int3> > ())
+        ;
     }
 
 

@@ -61,7 +61,7 @@ using namespace boost::python;
 
 // specify the python module. Note that the name must expliclty match the PROJECT() name provided in CMakeLists
 // (with an underscore in front)
-BOOST_PYTHON_MODULE(_ordering_external)
+BOOST_PYTHON_MODULE(_external)
     {
     export_OrderingExternal();
     

@@ -50,15 +50,14 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Maintainer: jglaser
 
-#include <hoomd/HOOMDMath.h>
-#include <hoomd/ParticleData.cuh>
+#include "OrderingExternalGPU.cuh"
 
 #ifdef WIN32
 #include <cassert>
 #else
 #include <assert.h>
 #endif
-
+#include <cuda.h>
 
 /*! \file OrderingExternalGPU.cuh
     \brief Defines templated GPU kernel code for calculating the external forces.
@@ -85,7 +84,8 @@ __global__ void gpu_compute_ordering_external_forces_kernel(float4 *d_force,
                                                const BoxDim box,
                                                const Scalar *order_parameters,
                                                const unsigned int n_wave, 
-                                               const int3 *lattice_vectors)
+                                               const int3 *lattice_vectors,
+                                               const Scalar *interface_widths)
     {
     // start by identifying which particle we are to handle
     unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -110,20 +110,21 @@ __global__ void gpu_compute_ordering_external_forces_kernel(float4 *d_force,
     Scalar cosine = Scalar(0.0);
     Scalar3 deriv = make_scalar3(0.0,0.0,0.0);
     for (unsigned int i = 0; i < n_wave; ++i) {
-        Scalar3 q = make_scalar3(2.0*M_PI*lattice_vectors[i].x/L.x, 
-                                 2.0*M_PI*lattice_vectors[i].y/L.y, 
-                                 2.0*M_PI*lattice_vectors[i].z/L.z);
-        Scalar arg, sine;
+        Scalar3 q = make_scalar3(Scalar(2.0*M_PI)*lattice_vectors[i].x/L.x, 
+                                 Scalar(2.0*M_PI)*lattice_vectors[i].y/L.y, 
+                                 Scalar(2.0*M_PI)*lattice_vectors[i].z/L.z);
+        Scalar arg, sine, clip_parameter;
         arg = dot(Xi, q);
-        sine = sinf(arg);
+        clip_parameter = Scalar(1.0)/(interface_widths[i]*dot(q, L));
+        sine = clip_parameter*sinf(arg);
         deriv = deriv - sine*q; 
-        cosine += cosf(arg);
+        cosine += clip_parameter*cosf(arg);
     }
     Scalar tanH = tanhf(cosine);
     
     energy = order_parameter*tanH;
     
-    Scalar sechSq = (1.0 - tanH*tanH);
+    Scalar sechSq = (Scalar(1.0) - tanH*tanH);
     Scalar f = order_parameter*sechSq;
     force = f*deriv;
 
@@ -152,7 +153,8 @@ cudaError_t gpu_compute_ordering_external_forces(float4 *d_force,
               const unsigned int block_size,
               const Scalar *d_order_parameters, 
               const unsigned int n_wave,
-              const int3 *d_lattice_vectors)
+              const int3 *d_lattice_vectors,
+              const Scalar *d_interface_widths)
     {
     // setup the grid to run the kernel
     dim3 grid( N / block_size + 1, 1, 1);
@@ -160,7 +162,7 @@ cudaError_t gpu_compute_ordering_external_forces(float4 *d_force,
 
     // bind the position texture
     gpu_compute_ordering_external_forces_kernel
-           <<<grid, threads>>>(d_force, d_virial, virial_pitch, N, d_pos, box, d_order_parameters, n_wave, d_lattice_vectors);
+           <<<grid, threads>>>(d_force, d_virial, virial_pitch, N, d_pos, box, d_order_parameters, n_wave, d_lattice_vectors, d_interface_widths);
 
     return cudaSuccess;
     }
