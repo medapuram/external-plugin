@@ -71,7 +71,7 @@ class potential(force._force):
     # Initializes the cpp_force to None.
     # If specified, assigns a name to the instance
     # Assigns a name to the force in force_name;
-    def __init__(self, order_parameters, lattice_vectors, interface_widths, name):
+    def __init__(self, order_parameters, lattice_vectors, interface_width, periodicity, name):
         # initialize the base class
         force._force.__init__(self, name);
 
@@ -88,14 +88,14 @@ class potential(force._force):
                 raise RuntimeError('Error creating external ordering potential.')
             cpp_lattice_vectors.append(hoomd.make_int3(l[0], l[1], l[2]))
 
-        cpp_interface_widths = hoomd.std_vector_float()
-        for l in interface_widths:
-            cpp_interface_widths.append(l)
+        cpp_interface_width = float(interface_width)
+
+        cpp_periodicity = int(periodicity)
 
         if not globals.exec_conf.isCUDAEnabled():
-            self.cpp_force = _external.OrderingExternal(globals.system_definition, cpp_order_parameters, cpp_lattice_vectors, cpp_interface_widths, self.name)
+            self.cpp_force = _external.OrderingExternal(globals.system_definition, cpp_order_parameters, cpp_lattice_vectors, cpp_interface_width, cpp_periodicity, self.name)
         else:
-            self.cpp_force = _external.OrderingExternalGPU(globals.system_definition, cpp_order_parameters, cpp_lattice_vectors, cpp_interface_widths, self.name)
+            self.cpp_force = _external.OrderingExternalGPU(globals.system_definition, cpp_order_parameters, cpp_lattice_vectors, cpp_interface_width, cpp_periodicity, self.name)
 
         globals.system.addCompute(self.cpp_force, self.force_name)
 

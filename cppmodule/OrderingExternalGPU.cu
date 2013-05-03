@@ -85,7 +85,8 @@ __global__ void gpu_compute_ordering_external_forces_kernel(float4 *d_force,
                                                const Scalar *order_parameters,
                                                const unsigned int n_wave, 
                                                const int3 *lattice_vectors,
-                                               const Scalar *interface_widths)
+                                               const Scalar interface_width,
+                                               const unsigned int periodicity)
     {
     // start by identifying which particle we are to handle
     unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -107,19 +108,21 @@ __global__ void gpu_compute_ordering_external_forces_kernel(float4 *d_force,
 
     Scalar3 L = box.getL();
     
+    Scalar clip_parameter = Scalar(1.0)/(Scalar(2.0*M_PI)*interface_width*periodicity);
     Scalar cosine = Scalar(0.0);
     Scalar3 deriv = make_scalar3(0.0,0.0,0.0);
     for (unsigned int i = 0; i < n_wave; ++i) {
         Scalar3 q = make_scalar3(Scalar(2.0*M_PI)*lattice_vectors[i].x/L.x, 
                                  Scalar(2.0*M_PI)*lattice_vectors[i].y/L.y, 
                                  Scalar(2.0*M_PI)*lattice_vectors[i].z/L.z);
-        Scalar arg, sine, clip_parameter;
+        Scalar arg, sine;
         arg = dot(Xi, q);
-        clip_parameter = Scalar(1.0)/(interface_widths[i]*dot(q, L));
-        sine = clip_parameter*sinf(arg);
-        deriv = deriv - sine*q; 
-        cosine += clip_parameter*cosf(arg);
+        sine = -1.0*sinf(arg);
+        deriv = deriv + sine*q; 
+        cosine += cosf(arg);
     }
+    cosine *= clip_parameter;
+    deriv *= clip_parameter;
     Scalar tanH = tanhf(cosine);
     
     energy = order_parameter*tanH;
@@ -154,7 +157,8 @@ cudaError_t gpu_compute_ordering_external_forces(float4 *d_force,
               const Scalar *d_order_parameters, 
               const unsigned int n_wave,
               const int3 *d_lattice_vectors,
-              const Scalar *d_interface_widths)
+              const Scalar interface_width,
+              const unsigned int periodicity)
     {
     // setup the grid to run the kernel
     dim3 grid( N / block_size + 1, 1, 1);
@@ -162,7 +166,7 @@ cudaError_t gpu_compute_ordering_external_forces(float4 *d_force,
 
     // bind the position texture
     gpu_compute_ordering_external_forces_kernel
-           <<<grid, threads>>>(d_force, d_virial, virial_pitch, N, d_pos, box, d_order_parameters, n_wave, d_lattice_vectors, d_interface_widths);
+           <<<grid, threads>>>(d_force, d_virial, virial_pitch, N, d_pos, box, d_order_parameters, n_wave, d_lattice_vectors, interface_width, periodicity);
 
     return cudaSuccess;
     }

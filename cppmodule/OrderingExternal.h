@@ -64,7 +64,7 @@ class OrderingExternal: public ForceCompute
     public:
         //! Constructs the compute
         OrderingExternal(boost::shared_ptr<SystemDefinition> sysdef, std::vector<Scalar> order_parameters, 
-                         std::vector<int3> lattice_vectors, std::vector<Scalar> interface_widths, std::string log_suffix);
+                         std::vector<int3> lattice_vectors, Scalar interface_width, unsigned int periodicity, std::string log_suffix);
 
         //! Sets parameters of the evaluator
         void setParams(unsigned int type, Scalar order_parameter);
@@ -77,9 +77,10 @@ class OrderingExternal: public ForceCompute
 
     protected:
 
-        GPUArray<Scalar> m_order_parameters;        //!< Array of per-type parameters
-        GPUArray<int3> m_lattice_vectors;          //!< Array of lattice vectors
-        GPUArray<Scalar> m_interface_widths;        //!< Array of interface widths
+        GPUArray<Scalar> m_order_parameters;      //!< Array of per-type parameters
+        GPUArray<int3> m_lattice_vectors;         //!< Array of lattice vectors
+        Scalar m_interface_width;                 //!< Interface width
+        unsigned int m_periodicity;               //!< Periodicity
         std::string m_log_name;               //!< Cached log name
 
         //! Actually compute the forces

@@ -54,8 +54,8 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     \param sysdef system definition
  */
 OrderingExternalGPU::OrderingExternalGPU(boost::shared_ptr<SystemDefinition> sysdef, std::vector<Scalar> order_parameters, 
-                                         std::vector<int3> lattice_vectors, std::vector<Scalar> interface_widths, std::string log_suffix)
-    : OrderingExternal(sysdef, order_parameters, lattice_vectors, interface_widths, log_suffix), m_block_size(512)
+                                         std::vector<int3> lattice_vectors, Scalar interface_width, unsigned int periodicity, std::string log_suffix)
+    : OrderingExternal(sysdef, order_parameters, lattice_vectors, interface_width, periodicity, log_suffix), m_block_size(512)
     {
     }
 
@@ -75,7 +75,6 @@ void OrderingExternalGPU::computeForces(unsigned int timestep)
     ArrayHandle<Scalar> d_virial(this->m_virial, access_location::device, access_mode::overwrite);
     ArrayHandle<Scalar> d_order_parameters(this->m_order_parameters, access_location::device, access_mode::read);
     ArrayHandle<int3> d_lattice_vectors(this->m_lattice_vectors, access_location::device, access_mode::read);
-    ArrayHandle<Scalar> d_interface_widths(this->m_interface_widths, access_location::device, access_mode::read);
     
     gpu_compute_ordering_external_forces(d_force.data,
                          d_virial.data,
@@ -83,7 +82,7 @@ void OrderingExternalGPU::computeForces(unsigned int timestep)
                          this->m_pdata->getN(),
                          d_pos.data,
                          box,
-                         m_block_size, d_order_parameters.data, m_lattice_vectors.getNumElements(), d_lattice_vectors.data, d_interface_widths.data);
+                         m_block_size, d_order_parameters.data, m_lattice_vectors.getNumElements(), d_lattice_vectors.data, m_interface_width, m_periodicity);
 
     if (this->m_prof) this->m_prof->pop();
 
@@ -97,7 +96,7 @@ void export_OrderingExternalGPU()
     {
     boost::python::class_<OrderingExternalGPU, boost::shared_ptr<OrderingExternalGPU>, boost::python::bases<OrderingExternal>, boost::noncopyable >
                   ("OrderingExternalGPU", boost::python::init< boost::shared_ptr<SystemDefinition>, 
-                   std::vector<Scalar>, std::vector<int3>, std::vector<Scalar>, std::string >())
+                   std::vector<Scalar>, std::vector<int3>, Scalar, unsigned int, std::string >())
                   .def("setBlockSize", &OrderingExternalGPU::setBlockSize)
                   ;
     }

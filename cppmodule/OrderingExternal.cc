@@ -52,8 +52,8 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     \param sysdef system definition
  */
 OrderingExternal::OrderingExternal(boost::shared_ptr<SystemDefinition> sysdef, std::vector<Scalar> order_parameters, 
-                                   std::vector<int3> lattice_vectors, std::vector<Scalar> interface_widths, std::string log_suffix)
-    : ForceCompute(sysdef)
+                                   std::vector<int3> lattice_vectors, Scalar interface_width, unsigned int periodicity, std::string log_suffix)
+    : ForceCompute(sysdef), m_interface_width(interface_width), m_periodicity(periodicity)
     {
     m_log_name = std::string("external_ordering") + log_suffix;
 
@@ -77,14 +77,6 @@ OrderingExternal::OrderingExternal(boost::shared_ptr<SystemDefinition> sysdef, s
     for(unsigned int i = 0; i < m_lattice_vectors.getNumElements(); ++i)
         {
         h_lattice_vectors.data[i] = lattice_vectors[i];
-        }
-
-    GPUArray<Scalar> gpu_interface_widths(interface_widths.size(), exec_conf);
-    m_interface_widths.swap(gpu_interface_widths);
-    ArrayHandle<Scalar> h_interface_widths(m_interface_widths, access_location::host, access_mode::overwrite);
-    for(unsigned int i = 0; i < m_interface_widths.getNumElements(); ++i)
-        {
-        h_interface_widths.data[i] = interface_widths[i];
         }
     }
 
@@ -133,7 +125,6 @@ void OrderingExternal::computeForces(unsigned int timestep)
 
     ArrayHandle<Scalar> h_order_parameters(m_order_parameters,access_location::host, access_mode::read);
     ArrayHandle<int3> h_lattice_vectors(m_lattice_vectors,access_location::host, access_mode::read);
-    ArrayHandle<Scalar> h_interface_widths(m_interface_widths,access_location::host, access_mode::read);
 
     const BoxDim& box = m_pdata->getGlobalBox();
     Scalar3 L = box.getL();
@@ -163,18 +154,20 @@ void OrderingExternal::computeForces(unsigned int timestep)
 
         Scalar cosine = Scalar(0.0);
         Scalar3 deriv = make_scalar3(0.0,0.0,0.0);
+        Scalar clip_parameter = Scalar(1.0)/(Scalar(2.0*M_PI)*m_interface_width*m_periodicity);
         for (unsigned int i = 0; i < n_wave; ++i) 
             {
             Scalar3 q = make_scalar3(2.0*M_PI*h_lattice_vectors.data[i].x/L.x,
                                  2.0*M_PI*h_lattice_vectors.data[i].y/L.y,
                                  2.0*M_PI*h_lattice_vectors.data[i].z/L.z);
-            Scalar arg, sine, clip_parameter;
+            Scalar arg, sine;
             arg = dot(X, q);
-            clip_parameter = Scalar(1.0)/(h_interface_widths.data[i]*dot(q, L));
-            sine = clip_parameter*sinf(arg);
-            deriv = deriv - sine*q;
-            cosine += clip_parameter*cosf(arg);
+            sine = -1.0*sinf(arg);
+            deriv = deriv + sine*q;
+            cosine += cosf(arg);
             }
+            cosine *= clip_parameter;
+            deriv *= clip_parameter;
         Scalar tanH = tanhf(cosine);
         energy = order_parameter*tanH;
 
@@ -220,7 +213,7 @@ void export_OrderingExternal()
     {
     boost::python::class_<OrderingExternal, boost::shared_ptr<OrderingExternal>, boost::python::bases<ForceCompute>, boost::noncopyable >
                   ("OrderingExternal", boost::python::init< boost::shared_ptr<SystemDefinition>, std::vector<Scalar>, 
-                   std::vector<int3>, std::vector<Scalar>, std::string >())
+                   std::vector<int3>, Scalar, unsigned int, std::string >())
                   ;
 
         class_<std::vector<int3> >("std_vector_int3")

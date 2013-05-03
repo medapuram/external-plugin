@@ -65,7 +65,7 @@ class OrderingExternalGPU : public OrderingExternal
     public:
         //! Constructs the compute
         OrderingExternalGPU(boost::shared_ptr<SystemDefinition> sysdef, std::vector<Scalar> order_parameters, 
-                            std::vector<int3> lattice_vectors, std::vector<Scalar> interface_widths, std::string log_suffix);
+                            std::vector<int3> lattice_vectors, Scalar interface_width, unsigned int periodicity, std::string log_suffix);
 
         //! Set the block size to execute on the GPU
         /*! \param block_size Size of the block to run on the device

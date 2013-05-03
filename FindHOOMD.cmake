@@ -62,6 +62,7 @@ find_library(HOOMD_LIB
              NAMES hoomd
              HINTS ${HOOMD_ROOT}/lib/hoomd/python-module ${HOOMD_ROOT}/lib
                    ${HOOMD_ROOT}/lib64/hoomd/python-module ${HOOMD_ROOT}/lib64
+                   ${HOOMD_ROOT}/libhoomd
                    ${HOOMD_ROOT}/lib64/python/site-packages
                    ${HOOMD_ROOT}/lib64/python2.4/site-packages
                    ${HOOMD_ROOT}/lib64/python2.5/site-packages

@@ -12,4 +12,5 @@ cudaError_t gpu_compute_ordering_external_forces(float4 *d_force,
               const Scalar *d_order_parameters, 
               const unsigned int n_wave,
               const int3 *d_lattice_vectors,
-              const Scalar *d_interface_widths);
+              const Scalar interface_width,
+              const unsigned int periodicity);
