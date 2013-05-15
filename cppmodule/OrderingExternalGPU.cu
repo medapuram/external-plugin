@@ -101,28 +101,37 @@ __global__ void gpu_compute_ordering_external_forces_kernel(float4 *d_force,
     // initialize the force to 0
     Scalar3 force = make_scalar3(0.0, 0.0, 0.0);
     Scalar energy = Scalar(0.0);
+    Scalar3 L = box.getL();
 
-    Scalar3 Xi = make_scalar3(posi.x, posi.y, posi.z);
+    Scalar3 Xi = make_scalar3((posi.x + (L.x/Scalar(2.0)))/(L.x), 
+                              (posi.y + (L.y/Scalar(2.0)))/(L.y), 
+                              (posi.z + (L.z/Scalar(2.0)))/(L.z));
+
     unsigned int typei = __float_as_int(posi.w);
     Scalar order_parameter = order_parameters[typei];
 
-    Scalar3 L = box.getL();
-    
-    Scalar clip_parameter = Scalar(1.0)/(Scalar(2.0*M_PI)*interface_width*periodicity);
     Scalar cosine = Scalar(0.0);
     Scalar3 deriv = make_scalar3(0.0,0.0,0.0);
     for (unsigned int i = 0; i < n_wave; ++i) {
-        Scalar3 q = make_scalar3(Scalar(2.0*M_PI)*lattice_vectors[i].x/L.x, 
-                                 Scalar(2.0*M_PI)*lattice_vectors[i].y/L.y, 
-                                 Scalar(2.0*M_PI)*lattice_vectors[i].z/L.z);
-        Scalar arg, sine;
-        arg = dot(Xi, q);
-        sine = -1.0*sinf(arg);
-        deriv = deriv + sine*q; 
-        cosine += cosf(arg);
+        Scalar3 q = make_scalar3(2.0*M_PI*lattice_vectors[i].x/L.x, 
+                                 2.0*M_PI*lattice_vectors[i].y/L.y, 
+                                 2.0*M_PI*lattice_vectors[i].z/L.z);
+        Scalar3 qr = make_scalar3(2.0*M_PI*lattice_vectors[i].x,
+                                  2.0*M_PI*lattice_vectors[i].y,
+                                  2.0*M_PI*lattice_vectors[i].z);
+
+        Scalar arg, q_length, clip_parameter, sine;
+        arg = dot(Xi, qr);
+        q_length = dot(q, L);
+        if (lattice_vectors[i].x != 0 || lattice_vectors[i].y != 0 || lattice_vectors[i].z != 0) {
+           clip_parameter = Scalar(1.0)/(interface_width*q_length);
+        } else {
+           clip_parameter = Scalar(0.0);
+        }
+        cosine += clip_parameter*cosf(arg);
+        sine = -Scalar(1.0)*clip_parameter*sinf(arg);
+        deriv = deriv + sine*q;
     }
-    cosine *= clip_parameter;
-    deriv *= clip_parameter;
     Scalar tanH = tanhf(cosine);
     
     energy = order_parameter*tanH;
